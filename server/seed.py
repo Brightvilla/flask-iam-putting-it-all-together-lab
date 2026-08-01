@@ -1,63 +1,63 @@
-#!/usr/bin/env python3
-
-from random import randint, choice as rc
+from random import randint
 
 from faker import Faker
 
-from app import app
-from models import db, Recipe, User
+from config import app, db
+from models import User, Recipe
 
 fake = Faker()
 
-with app.app_context():
-
-    print("Deleting all records...")
-    Recipe.query.delete()
-    User.query.delete()
-
-    fake = Faker()
-
-    print("Creating users...")
-
-    # make sure users have unique usernames
+def create_users(count=5):
     users = []
-    usernames = []
 
-    for i in range(20):
-        
-        username = fake.first_name()
-        while username in usernames:
-            username = fake.first_name()
-        usernames.append(username)
-
+    for i in range(count):
+        username = f"user{i+1}"
         user = User(
             username=username,
-            bio=fake.paragraph(nb_sentences=3),
-            image_url=fake.url(),
+            image_url=fake.image_url(),
+            bio=fake.sentence(nb_words=10),
         )
-
-        user.password_hash = user.username + 'password'
-
+        # simple password like "password1", etc.
+        user.password_hash = f"password{i+1}"
         users.append(user)
 
     db.session.add_all(users)
+    db.session.commit()
+    return users
 
-    print("Creating recipes...")
+def create_recipes(users, count=10):
     recipes = []
-    for i in range(100):
-        instructions = fake.paragraph(nb_sentences=8)
-        
+
+    for i in range(count):
+        user = fake.random_element(users)
+        title = fake.sentence(nb_words=3)
+        # ensure instructions length >= 50 chars
+        instructions = " ".join(fake.sentences(nb=5))
+        minutes_to_complete = randint(5, 120)
+
         recipe = Recipe(
-            title=fake.sentence(),
+            title=title,
             instructions=instructions,
-            minutes_to_complete=randint(15,90),
+            minutes_to_complete=minutes_to_complete,
+            user_id=user.id,
         )
-
-        recipe.user = rc(users)
-
         recipes.append(recipe)
 
     db.session.add_all(recipes)
-    
     db.session.commit()
-    print("Complete.")
+    return recipes
+
+if __name__ == "__main__":
+    with app.app_context():
+        print("Clearing data...")
+        Recipe.query.delete()
+        User.query.delete()
+        db.session.commit()
+
+        print("Creating users...")
+        users = create_users()
+
+        print("Creating recipes...")
+        create_recipes(users)
+
+        print("Seeding complete.")
